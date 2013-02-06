@@ -1,0 +1,67 @@
+<html>
+    <head>
+    <style type = "text/css">
+        img {
+            display: inline-block;
+            float: left;
+        }
+    </style>
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.0/jquery.min.js"></script>
+    <script type="text/javascript">
+        config = null;
+        time = null;
+
+        // Append an image to server div
+        function appendImage(url) {
+            image = $('<img>', {
+                src: url
+            });
+            $(image).hide().appendTo("#server").fadeIn();
+            // $("#server").append(image).fadeIn();
+        }
+
+        // Update images based on config file
+        function updateImages() {
+            if(localStorage != undefined) {
+                localStorage.statsView = $("#time").val();
+            }
+            time = $("#time").val();
+            $("#server").empty();
+            // CPU
+            appendImage('cpu_' + time + '.png');
+            // Network
+            for(dev in config['network_devices']) {
+                appendImage('traffic_' + dev + '_' + time + '.png');
+            }
+        }
+
+        $(document).ready(function(){
+            // If we have HTML5 storage, then save preferences
+            // Otherwise default to "day"
+            if(localStorage != undefined) {
+                time = localStorage.statsView;
+            } else {
+                time = "day";
+                $("#time").val(time);
+            }
+            // Get the config file and update images
+            $.getJSON('config.json', function(data){
+                config = data;
+                updateImages();
+            });
+        });
+    </script>
+</head>
+<body>
+    <form action="">
+        <select id="time" name="time" onchange="updateImages()">
+            <option value="hour">hour</option>
+            <option value="day">day</option>
+            <option value="week">week</option>
+            <option value="month">month</option>
+            <option value="year">year</option>
+        </select>
+    </form><br />
+    <div id="server"></div>
+</body>
+</html>

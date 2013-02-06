@@ -1,0 +1,8 @@
+{
+    "network_devices": {
+        "eth0": "web"
+    },
+    "cpu": {
+        "physical": 2
+    }
+}
