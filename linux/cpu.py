@@ -76,5 +76,5 @@ for period in ["hour", "day", "week", "month", "year"]:
         # Draw a line across the max for what max usage should be
         # this is particularly usefull if you have hyperthreading
         # or if you change processor count
-        "HRULE:%s#FF0000: Max Usage" % (CONFIG['cpu']['physical'] * 100),
+        "HRULE:%s#000000:Max Usage" % (CONFIG['cpu']['physical'] * 100),
     )
