@@ -35,6 +35,11 @@
             for(dev in config['network_devices']) {
                 appendImage('traffic_' + dev + '_' + time + '.png');
             }
+            // HDD
+            for(dev in config['hdd']) {
+                appendImage('hdd_io_' + dev + '_' + time + '.png');
+                appendImage('hdd_io_wait_' + dev + '_' + time + '.png');
+            }
         }
 
         $(document).ready(function(){

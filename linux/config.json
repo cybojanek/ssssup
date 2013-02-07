@@ -4,5 +4,8 @@
     },
     "cpu": {
         "physical": 2
+    },
+    "hdd": {
+        "sda": "root"
     }
 }
