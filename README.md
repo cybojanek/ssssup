@@ -10,7 +10,7 @@ Why Python? Because.
 
 ## Installation
 1. Copy the _linux/*_ files to somewhere in your web directory
-2. Add the Python files to a crontab that runs **every** minute
+2. Change the path of _runall.sh_ to your web stats directory and add it to a crontab that runs **every** minute
 3. Configure _config.json_
 
 ## Configuration
