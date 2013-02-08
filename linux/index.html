@@ -49,8 +49,8 @@
                 time = localStorage.statsView;
             } else {
                 time = "day";
-                $("#time").val(time);
             }
+            $("#time").val(time);
             // Get the config file and update images
             $.getJSON('config.json', function(data){
                 config = data;
