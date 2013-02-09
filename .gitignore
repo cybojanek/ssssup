@@ -1,3 +1,5 @@
+src/*.png
+src/*.rrd
 *.py[cod]
 
 # C extensions
