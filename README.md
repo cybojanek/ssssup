@@ -1,4 +1,4 @@
-# monitoring
+# Super Simple Server Stats Using Python
 
 
 Collection of simple monitoring sccripts in Python.
