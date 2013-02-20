@@ -31,6 +31,10 @@
             appendImage('cpu_' + time + '.png');
             // RAM
             appendImage('ram_' + time + '.png');
+            // SWAP
+            if(config['swap']) {
+                appendImage('swap_' + time + '.png');
+            }
             // Network
             for(dev in config['network_devices']) {
                 appendImage('traffic_' + dev + '_' + time + '.png');

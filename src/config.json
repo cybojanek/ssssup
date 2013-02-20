@@ -7,5 +7,6 @@
     },
     "hdd": {
         "sda": "root"
-    }
+    },
+    "swap": true
 }

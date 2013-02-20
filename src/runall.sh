@@ -4,3 +4,4 @@ cd /srv/http/stats
 ./network.py &
 ./ram.py &
 ./hdd.py &
+./swap.py &

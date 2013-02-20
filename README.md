@@ -1,8 +1,6 @@
 # Super Simple Server Stats Using Python
 
-
-Collection of simple monitoring sccripts in Python.
-Why Python? Because.
+Collection of simple monitoring sccripts in Python. Why Python? Because.
 
 ## Requirements
 1. _simplejson_ and _rrdtool_ Python packages
@@ -22,3 +20,6 @@ The configuration file is a single JSON dictionary, with the following usage:
 
 * **cpu**
   * **physical**: number of physical cpus, used to mark max line, especially usefull for hyperthreading
+
+* **swap**
+  * Set to "true" / "false" for whether to record swap usage
