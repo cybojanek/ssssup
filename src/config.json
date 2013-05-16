@@ -8,5 +8,6 @@
     "hdd": {
         "sda": "root"
     },
-    "swap": true
+    "swap": true,
+    "nginx": "http://127.0.0.1/nginx_status/"
 }

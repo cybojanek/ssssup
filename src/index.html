@@ -39,6 +39,11 @@
             for(dev in config['network_devices']) {
                 appendImage('traffic_' + dev + '_' + time + '.png');
             }
+            // Nginx
+            if(config['nginx']) {
+                appendImage('nginx_requests_' + time + '.png')
+                appendImage('nginx_connections_' + time + '.png')
+            }
             // HDD
             for(dev in config['hdd']) {
                 appendImage('hdd_io_' + dev + '_' + time + '.png');
