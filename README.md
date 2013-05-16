@@ -30,7 +30,7 @@ The configuration file is a single JSON dictionary, with the following usage:
 
 * **nginx**
   * Set to a non empty url that points to the nginx stat module
-  * You also need to enable the nginx stats moudle with this in your config
+  * You also need to enable the nginx stats module:
 
 ```
 location /nginx_status {

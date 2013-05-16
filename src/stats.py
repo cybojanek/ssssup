@@ -146,7 +146,7 @@ class CPUStat(Stat):
             # Draw a line across the max for what max usage should be
             # this is particularly usefull if you have hyperthreading
             # or if you change processor count
-            "HRULE:%s#000000:Max Usage" % (self.pcpu),
+            "HRULE:%s#000000:Max Usage" % (self.pcpu * 100),
         )
 
 
