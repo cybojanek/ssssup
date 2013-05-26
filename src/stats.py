@@ -22,13 +22,55 @@ def get_config():
         return None
 
 
+class DS(object):
+    GAUGE, DERIVE = "GAUGE", "DERIVE"
+
+    @staticmethod
+    def ds(names=None, dtype=None, interval=120, llimit=0, ulimit="U"):
+        """Return a list of rrdtool DS strings
+
+        Keyword Arguments:
+        names - list of string names for sources
+        dtype - one of DS.GAUGE or DS.DERIVE
+        interval - stat timeout, default: 120
+        llimit - lower limit on data, default: 0
+        ulimit - upper limit on data, default: "U"
+
+        Return:
+        list of DS strings
+
+        """
+        ret = []
+        for name in names:
+            if dtype not in [DS.GAUGE, DS.DERIVE]:
+                raise ValueError("Need a data string dtype")
+            if not isinstance(ulimit, int) and not ulimit == "U":
+                raise ValueError("Need a valid data string ulimit")
+            ret.append("DS:%s:%s:%s:%s:%s" % (name, dtype, interval, llimit,
+                                              ulimit))
+        return ret
+
+
 class Stat(object):
     """Generic stat collection class.
     Must implement read and write data
+    TODO: abstract rrd data sources
+    TODO: subprocess calls for rrdtool in twisted for async
     """
-    def __init__(self, file_name, rrd_data_source):
+    AVERAGES = [
+        "RRA:AVERAGE:0.5:1:2880",
+        "RRA:AVERAGE:0.5:30:672",
+        "RRA:AVERAGE:0.5:120:732",
+        "RRA:AVERAGE:0.5:720:1460"
+    ]
+
+    def __init__(self, file_name, rrd_data_source, averages=None):
         self.rrd_file_name = file_name
         self.rrd_data_source = rrd_data_source
+        if averages is None:
+            self.averages = Stat.AVERAGES
+        else:
+            self.averages = averages
         self.stats = {}
 
     def create_rrd(self):
@@ -38,8 +80,9 @@ class Stat(object):
         self.rrd_data_source - array of rrd data definitions
 
         """
+        # TODO: check for matching data sources
         if not os.path.isfile(self.rrd_file_name):
-            rrdtool.create(self.rrd_file_name, *self.rrd_data_source)
+            rrdtool.create(self.rrd_file_name, *self.rrd_data_source + self.averages)
 
     def update_stat(self):
         """Update RRD file with key value pairs from self.stats
@@ -47,6 +90,7 @@ class Stat(object):
         self.stats
 
         """
+        # TODO: check for matching data sources
         # Update RRD values
         rrdtool.update(
             self.rrd_file_name,
@@ -66,17 +110,8 @@ class CPUStat(Stat):
     """Collect CPU usage information
     """
     FILE_NAME = 'cpu.rrd'
-    RRD_DATA_SOURCES = [
-        "DS:user:DERIVE:120:0:U",
-        "DS:nice:DERIVE:120:0:U",
-        "DS:system:DERIVE:120:0:U",
-        "DS:idle:DERIVE:120:0:U",
-        "DS:wait:DERIVE:120:0:U",
-        "RRA:AVERAGE:0.5:1:2880",
-        "RRA:AVERAGE:0.5:30:672",
-        "RRA:AVERAGE:0.5:120:732",
-        "RRA:AVERAGE:0.5:720:1460"
-    ]
+    RRD_DATA_SOURCES = DS.ds(["user", "nice", "system", "idle", "wait"],
+                             DS.DERIVE)
 
     def __init__(self, pcpu):
         """
@@ -154,16 +189,7 @@ class HDDStat(Stat):
     """Collect RAM usage information
     """
     FILE_NAME = 'hdd_io_%s.rrd'
-    RRD_DATA_SOURCES = [
-        "DS:read:DERIVE:120:0:U",
-        "DS:write:DERIVE:120:0:U",
-        "DS:rwait:DERIVE:120:0:U",
-        "DS:wwait:DERIVE:120:0:U",
-        "RRA:AVERAGE:0.5:1:576",
-        "RRA:AVERAGE:0.5:6:672",
-        "RRA:AVERAGE:0.5:24:732",
-        "RRA:AVERAGE:0.5:144:1460"
-    ]
+    RRD_DATA_SOURCES = DS.ds(["read", "write", "rwait", "wwait"], DS.DERIVE)
 
     def __init__(self, device, name):
         """
@@ -251,16 +277,8 @@ class RAMStat(Stat):
     """Collect RAM usage information
     """
     FILE_NAME = 'ram.rrd'
-    RRD_DATA_SOURCES = [
-        "DS:total:GAUGE:120:0:34359738368",
-        "DS:free:GAUGE:120:0:34359738368",
-        "DS:buffers:GAUGE:120:0:34359738368",
-        "DS:cached:GAUGE:120:0:34359738368",
-        "RRA:AVERAGE:0.5:1:2880",
-        "RRA:AVERAGE:0.5:30:672",
-        "RRA:AVERAGE:0.5:120:732",
-        "RRA:AVERAGE:0.5:720:1460"
-    ]
+    RRD_DATA_SOURCES = DS.ds(["total", "free", "buffers", "cached"], DS.GAUGE,
+                             ulimit=34359738368)
 
     def __init__(self):
         super(RAMStat, self).__init__(RAMStat.FILE_NAME,
@@ -335,15 +353,8 @@ class SwapStat(Stat):
     """Collect swap usage information
     """
     FILE_NAME = 'swap.rrd'
-    RRD_DATA_SOURCES = [
-        "DS:total:GAUGE:120:0:34359738368",
-        "DS:free:GAUGE:120:0:34359738368",
-        "DS:cached:GAUGE:120:0:34359738368",
-        "RRA:AVERAGE:0.5:1:2880",
-        "RRA:AVERAGE:0.5:30:672",
-        "RRA:AVERAGE:0.5:120:732",
-        "RRA:AVERAGE:0.5:720:1460"
-    ]
+    RRD_DATA_SOURCES = DS.ds(["total", "free", "cached"], DS.GAUGE,
+                             ulimit=34359738368)
 
     def __init__(self):
         super(SwapStat, self).__init__(SwapStat.FILE_NAME,
@@ -403,14 +414,7 @@ class NetworkStat(Stat):
     """Collect RAM usage information
     """
     FILE_NAME = 'traffic_%s.rrd'
-    RRD_DATA_SOURCES = [
-        "DS:in:DERIVE:120:0:U",
-        "DS:out:DERIVE:120:0:U",
-        "RRA:AVERAGE:0.5:1:576",
-        "RRA:AVERAGE:0.5:6:672",
-        "RRA:AVERAGE:0.5:24:732",
-        "RRA:AVERAGE:0.5:144:1460"
-    ]
+    RRD_DATA_SOURCES = DS.ds(["in", "out"], DS.DERIVE)
 
     def __init__(self, device, name):
         """
@@ -468,17 +472,8 @@ class NginxStat(Stat):
     """Collect Nginx usage information
     """
     FILE_NAME = 'nginx.rrd'
-    RRD_DATA_SOURCES = [
-        "DS:requests:DERIVE:120:0:U",
-        "DS:total:GAUGE:120:0:U",
-        "DS:reading:GAUGE:120:0:U",
-        "DS:writing:GAUGE:120:0:U",
-        "DS:waiting:GAUGE:120:0:U",
-        "RRA:AVERAGE:0.5:1:2880",
-        "RRA:AVERAGE:0.5:30:672",
-        "RRA:AVERAGE:0.5:120:732",
-        "RRA:AVERAGE:0.5:720:1460"
-    ]
+    RRD_DATA_SOURCES = DS.ds(["requests"], DS.DERIVE) + \
+        DS.ds(["total", "reading", "writing", "waiting"], DS.GAUGE)
 
     def __init__(self, url):
         super(NginxStat, self).__init__(NginxStat.FILE_NAME,
