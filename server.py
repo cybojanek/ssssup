@@ -63,7 +63,8 @@ def load_stats():
     if config is None:
         exit(1)
     # Defaults
-    stats = [CPUStat(config['cpu']['physical']), RAMStat()]
+    stats.append(CPUStat(config['cpu']['physical']))
+    stats.append(RAMStat())
     # Swap
     if config['swap']:
         stats.append(SwapStat())
