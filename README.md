@@ -7,9 +7,12 @@ Collection of simple monitoring sccripts in Python. Why Python? Because. Demo at
 2. web server
 
 ## Installation
-1. Copy the _src/*_ files to somewhere in your web directory
-2. Add a crontab to cd into that directory and run the script **every** minute
-3. Configure _config.json_
+1. Configure _config.json_
+2. Launch with twistd:
+
+```
+twistd -y server.py
+```
 
 ## Configuration
 Why a JSON file? So I can reuse the info in _index.html_.
