@@ -1,6 +1,6 @@
 # Super Simple Server Stats Using Python and RRDTool
 
-Collection of simple monitoring sccripts in Python. Why Python? Because.
+Collection of simple monitoring sccripts in Python. Why Python? Because. Demo at http://cybojanek.net:8080
 
 ## Requirements
 1. *simplejson*, *rrdtool*, *twisted*, *crontab* Python packages
