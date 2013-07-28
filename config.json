@@ -3,11 +3,11 @@
         "eth0": "web"
     },
     "cpu": {
-        "physical": 2
+        "physical": 1
     },
     "hdd": {
         "sda": "root"
     },
     "swap": true,
-    "nginx": "http://127.0.0.1/nginx_status/"
+    "nginx": "http://localhost/nginx_status/"
 }

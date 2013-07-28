@@ -1,11 +1,10 @@
 import os
 import rrdtool
 import simplejson
-import sys
 import urllib2
 
 
-def get_config():
+def get_config(file_path):
     """Read config file. Doesn't check for values
 
     Return:
@@ -13,7 +12,7 @@ def get_config():
 
     """
     try:
-        return simplejson.load(open('config.json', 'r'))
+        return simplejson.load(open(file_path, 'r'))
     except IOError:
         print 'Cant read config file!'
         return None
@@ -24,14 +23,15 @@ def get_config():
 
 class DS(object):
     GAUGE, DERIVE = "GAUGE", "DERIVE"
+    AVERAGE, MINIMUM, MAXIMUM, LAST = "AVERAGE", "MINIMUM", "MAXIMUM", "LAST"
 
     @staticmethod
-    def ds(names=None, dtype=None, interval=120, llimit=0, ulimit="U"):
+    def ds(names=None, dstype=None, interval=120, llimit=0, ulimit="U"):
         """Return a list of rrdtool DS strings
 
         Keyword Arguments:
         names - list of string names for sources
-        dtype - one of DS.GAUGE or DS.DERIVE
+        dstype - one of DS.GAUGE or DS.DERIVE
         interval - stat timeout, default: 120
         llimit - lower limit on data, default: 0
         ulimit - upper limit on data, default: "U"
@@ -42,12 +42,37 @@ class DS(object):
         """
         ret = []
         for name in names:
-            if dtype not in [DS.GAUGE, DS.DERIVE]:
-                raise ValueError("Need a data string dtype")
+            if dstype not in [DS.GAUGE, DS.DERIVE]:
+                raise ValueError("Need a data string dstype")
             if not isinstance(ulimit, int) and not ulimit == "U":
                 raise ValueError("Need a valid data string ulimit")
-            ret.append("DS:%s:%s:%s:%s:%s" % (name, dtype, interval, llimit,
+            ret.append("DS:%s:%s:%s:%s:%s" % (name, dstype, interval, llimit,
                                               ulimit))
+        return ret
+
+    @staticmethod
+    def rra(cf=None, steps=None, rows=None):
+        """Return a list of rrdtool RRA strings
+        Number of steps must equal number of rows
+
+        Keyword Arguments:
+        cf - one of DS.AVERAGE, DS.MINIMUM, DS.MAXIMUM, DS.LAST
+        steps - lists of steps
+        rows - list of rows
+
+        Return:
+        list of RRA strings
+
+        """
+        ret = []
+        for step, row in zip(steps, rows):
+            if cf not in [DS.AVERAGE, DS.MINIMUM, DS.MAXIMUM, DS.LAST]:
+                raise ValueError("Need a proper cf value")
+            if not isinstance(step, int):
+                raise ValueError("Step needs to be an int")
+            if not isinstance(row, int):
+                raise ValueError("Row needs to be an int")
+            ret.append("RRA:%s:0.5:%s:%s" % (cf, step, row))
         return ret
 
 
@@ -57,12 +82,9 @@ class Stat(object):
     TODO: abstract rrd data sources
     TODO: subprocess calls for rrdtool in twisted for async
     """
-    AVERAGES = [
-        "RRA:AVERAGE:0.5:1:2880",
-        "RRA:AVERAGE:0.5:30:672",
-        "RRA:AVERAGE:0.5:120:732",
-        "RRA:AVERAGE:0.5:720:1460"
-    ]
+    AVERAGES = DS.rra(DS.AVERAGE, [1, 30, 120, 720], [2880, 672, 732, 1460])
+    IMAGE_PREFIXES = []
+    IMAGE_PERIODS = ['hour', 'day', 'week', 'month', 'year']
 
     def __init__(self, file_name, rrd_data_source, averages=None):
         self.rrd_file_name = file_name
@@ -102,8 +124,11 @@ class Stat(object):
     def read_stat(self):
         raise NotImplemented("Read Stat not implemented")
 
-    def make_image(self, period):
-        raise NotImplemented("Make Image not implemented")
+    def make_image(self, prefix, period):
+        if prefix not in self.IMAGE_PREFIXES:
+            raise Exception("Prefix: %s not in image prefixes" % (prefix))
+        if period not in self.IMAGE_PERIODS:
+            raise Exception("Period: %s not in image periods" % (period))
 
 
 class CPUStat(Stat):
@@ -112,6 +137,7 @@ class CPUStat(Stat):
     FILE_NAME = 'cpu.rrd'
     RRD_DATA_SOURCES = DS.ds(["user", "nice", "system", "idle", "wait"],
                              DS.DERIVE)
+    IMAGE_PREFIXES = ['cpu']
 
     def __init__(self, pcpu):
         """
@@ -136,9 +162,10 @@ class CPUStat(Stat):
         self.stats['idle'] = stats[3]
         self.stats['wait'] = stats[4]
 
-    def make_image(self, period):
+    def make_image(self, prefix, period):
+        super(CPUStat, self).make_image(prefix, period)
         rrdtool.graph(
-            "cpu_%s.png" % period,
+            "%s_%s.png" % (prefix, period),
             "-s -1%s" % period,
             "-t Cpu usage",
             "--lazy",
@@ -206,6 +233,7 @@ class HDDStat(Stat):
         self.stats['write'] = 0
         self.stats['rwait'] = 0
         self.stats['wwait'] = 0
+        self.IMAGE_PREFIXES = ['hdd_io_%s' % self.device, 'hdd_io_wait_%s' % self.device]
 
     def read_stat(self):
         self.stats['read'] = 0
@@ -224,53 +252,56 @@ class HDDStat(Stat):
         except:
             pass
 
-    def make_image(self, period):
-        rrdtool.graph(
-            "hdd_io_%s_%s.png" % (self.device, period),
-            "-s -1%s" % period,
-            "-t iops on %s :: %s" % (self.device, self.name),
-            "--lazy",
-            "-h", "150", "-w", "700",
-            "-l 0", "-b", "1000",
-            "-a", "PNG",
-            "-v iops/sec",
-            "DEF:read=%s:read:AVERAGE" % HDDStat.FILE_NAME % self.device,
-            "DEF:write=%s:write:AVERAGE" % HDDStat.FILE_NAME % self.device,
-            "CDEF:write_neg=write,-1,*",
-            "TEXTALIGN:left",
-            "AREA:read#000099:Read ops ",
-            "GPRINT:read:MAX:  Max\\: %5.1lf %s",
-            "GPRINT:read:AVERAGE: Avg\\: %5.1lf %S",
-            "GPRINT:read:LAST: Current\\: %5.1lf %S ops/sec\\n",
-            "AREA:write_neg#FF0000:Write ops",
-            "GPRINT:write:MAX:  Max\\: %5.1lf %S",
-            "GPRINT:write:AVERAGE: Avg\\: %5.1lf %S",
-            "GPRINT:write:LAST: Current\\: %5.1lf %S ops/sec",
-            "HRULE:0#000000"
-        )
-        rrdtool.graph(
-            "hdd_io_wait_%s_%s.png" % (self.device, period),
-            "-s -1%s" % period,
-            "-t wait on %s :: %s" % (self.device, self.name),
-            "--lazy",
-            "-h", "150", "-w", "700",
-            "-l 0", "-b", "1000",
-            "-a", "PNG",
-            "-v seconds",
-            "DEF:rwait=%s:rwait:AVERAGE" % HDDStat.FILE_NAME % self.device,
-            "DEF:wwait=%s:wwait:AVERAGE" % HDDStat.FILE_NAME % self.device,
-            "CDEF:wwait_neg=wwait,-1,*",
-            "TEXTALIGN:left",
-            "AREA:rwait#000099:Read wait ",
-            "GPRINT:rwait:MAX:  Max\\: %5.1lf %s",
-            "GPRINT:rwait:AVERAGE: Avg\\: %5.1lf %S",
-            "GPRINT:rwait:LAST: Current\\: %5.1lf %S seconds\\n",
-            "AREA:wwait_neg#FF0000:Write wait",
-            "GPRINT:wwait:MAX:  Max\\: %5.1lf %S",
-            "GPRINT:wwait:AVERAGE: Avg\\: %5.1lf %S",
-            "GPRINT:wwait:LAST: Current\\: %5.1lf %S seconds",
-            "HRULE:0#000000"
-        )
+    def make_image(self, prefix, period):
+        super(HDDStat, self).make_image(prefix, period)
+        if prefix == 'hdd_io_%s' % self.device:
+            rrdtool.graph(
+                "hdd_io_%s_%s.png" % (self.device, period),
+                "-s -1%s" % period,
+                "-t iops on %s :: %s" % (self.device, self.name),
+                "--lazy",
+                "-h", "150", "-w", "700",
+                "-l 0", "-b", "1000",
+                "-a", "PNG",
+                "-v iops/sec",
+                "DEF:read=%s:read:AVERAGE" % HDDStat.FILE_NAME % self.device,
+                "DEF:write=%s:write:AVERAGE" % HDDStat.FILE_NAME % self.device,
+                "CDEF:write_neg=write,-1,*",
+                "TEXTALIGN:left",
+                "AREA:read#000099:Read ops ",
+                "GPRINT:read:MAX:  Max\\: %5.1lf %s",
+                "GPRINT:read:AVERAGE: Avg\\: %5.1lf %S",
+                "GPRINT:read:LAST: Current\\: %5.1lf %S ops/sec\\n",
+                "AREA:write_neg#FF0000:Write ops",
+                "GPRINT:write:MAX:  Max\\: %5.1lf %S",
+                "GPRINT:write:AVERAGE: Avg\\: %5.1lf %S",
+                "GPRINT:write:LAST: Current\\: %5.1lf %S ops/sec",
+                "HRULE:0#000000"
+            )
+        elif prefix == 'hdd_io_wait_%s' % self.device:
+            rrdtool.graph(
+                "hdd_io_wait_%s_%s.png" % (self.device, period),
+                "-s -1%s" % period,
+                "-t wait on %s :: %s" % (self.device, self.name),
+                "--lazy",
+                "-h", "150", "-w", "700",
+                "-l 0", "-b", "1000",
+                "-a", "PNG",
+                "-v seconds",
+                "DEF:rwait=%s:rwait:AVERAGE" % HDDStat.FILE_NAME % self.device,
+                "DEF:wwait=%s:wwait:AVERAGE" % HDDStat.FILE_NAME % self.device,
+                "CDEF:wwait_neg=wwait,-1,*",
+                "TEXTALIGN:left",
+                "AREA:rwait#000099:Read wait ",
+                "GPRINT:rwait:MAX:  Max\\: %5.1lf %s",
+                "GPRINT:rwait:AVERAGE: Avg\\: %5.1lf %S",
+                "GPRINT:rwait:LAST: Current\\: %5.1lf %S seconds\\n",
+                "AREA:wwait_neg#FF0000:Write wait",
+                "GPRINT:wwait:MAX:  Max\\: %5.1lf %S",
+                "GPRINT:wwait:AVERAGE: Avg\\: %5.1lf %S",
+                "GPRINT:wwait:LAST: Current\\: %5.1lf %S seconds",
+                "HRULE:0#000000"
+            )
 
 
 class RAMStat(Stat):
@@ -279,6 +310,7 @@ class RAMStat(Stat):
     FILE_NAME = 'ram.rrd'
     RRD_DATA_SOURCES = DS.ds(["total", "free", "buffers", "cached"], DS.GAUGE,
                              ulimit=34359738368)
+    IMAGE_PREFIXES = ['ram']
 
     def __init__(self):
         super(RAMStat, self).__init__(RAMStat.FILE_NAME,
@@ -305,9 +337,10 @@ class RAMStat(Stat):
         self.stats['buffers'] = stats['Buffers']
         self.stats['cached'] = stats['Cached']
 
-    def make_image(self, period):
+    def make_image(self, prefix, period):
+        super(RAMStat, self).make_image(prefix, period)
         rrdtool.graph(
-            "ram_%s.png" % period,
+            "%s_%s.png" % (prefix, period),
             "-s -1%s" % period,
             "-t Memory usage",
             "--lazy",
@@ -355,6 +388,7 @@ class SwapStat(Stat):
     FILE_NAME = 'swap.rrd'
     RRD_DATA_SOURCES = DS.ds(["total", "free", "cached"], DS.GAUGE,
                              ulimit=34359738368)
+    IMAGE_PREFIXES = ['swap']
 
     def __init__(self):
         super(SwapStat, self).__init__(SwapStat.FILE_NAME,
@@ -378,9 +412,10 @@ class SwapStat(Stat):
         self.stats['free'] = stats['SwapFree']
         self.stats['cached'] = stats['SwapCached']
 
-    def make_image(self, period):
+    def make_image(self, prefix, period):
+        super(SwapStat, self).make_image(prefix, period)
         rrdtool.graph(
-            "swap_%s.png" % period,
+            "%s_%s.png" % (prefix, period),
             "-s -1%s" % period,
             "-t Swap usage",
             "--lazy",
@@ -392,6 +427,7 @@ class SwapStat(Stat):
             "DEF:total=%s:total:AVERAGE" % SwapStat.FILE_NAME,
             "DEF:free=%s:free:AVERAGE" % SwapStat.FILE_NAME,
             "DEF:cached=%s:cached:AVERAGE" % SwapStat.FILE_NAME,
+            "CDEF:used=total,free,-,cached,-",
 
             "LINE2:total#FF0000:Total",
             "GPRINT:total:MIN:    Min\\: %8.2lf %S",
@@ -407,6 +443,11 @@ class SwapStat(Stat):
             "GPRINT:cached:MIN:   Min\\: %8.2lf %S",
             "GPRINT:cached:AVERAGE:\\tAvg\\: %8.2lf %S",
             "GPRINT:cached:MAX:\\tMax\\: %8.2lf %S \\n",
+
+            "STACK:used#FF9C0F:Used",
+            "GPRINT:used:MIN:     Min\\: %8.2lf %S",
+            "GPRINT:used:AVERAGE:\\tAvg\\: %8.2lf %S",
+            "GPRINT:used:MAX:\\tMax\\: %8.2lf %S \\n"
         )
 
 
@@ -429,6 +470,7 @@ class NetworkStat(Stat):
         self.name = name
         self.stats['in'] = 0
         self.stats['out'] = 0
+        self.IMAGE_PREFIXES = ['traffic_%s' % (self.device)]
 
     def read_stat(self):
         # Get current byte count
@@ -440,9 +482,10 @@ class NetworkStat(Stat):
         except:
             pass
 
-    def make_image(self, period):
+    def make_image(self, prefix, period):
+        super(NetworkStat, self).make_image(prefix, period)
         rrdtool.graph(
-            "traffic_%s_%s.png" % (self.device, period),
+            "%s_%s.png" % (prefix, period),
             "-s -1%s" % period,
             "-t traffic on %s :: %s" % (self.device, self.name),
             "--lazy",
@@ -474,6 +517,7 @@ class NginxStat(Stat):
     FILE_NAME = 'nginx.rrd'
     RRD_DATA_SOURCES = DS.ds(["requests"], DS.DERIVE) + \
         DS.ds(["total", "reading", "writing", "waiting"], DS.GAUGE)
+    IMAGE_PREFIXES = ['nginx_requests', 'nginx_connections']
 
     def __init__(self, url):
         super(NginxStat, self).__init__(NginxStat.FILE_NAME,
@@ -495,88 +539,92 @@ class NginxStat(Stat):
         self.stats['writing'] = rww[1]
         self.stats['waiting'] = rww[2]
 
+    def make_image(self, prefix, period):
+        super(NginxStat, self).make_image(prefix, period)
+        if prefix == 'nginx_requests':
+            rrdtool.graph(
+                "nginx_requests_%s.png" % period,
+                "-s -1%s" % period,
+                "-t Requests on nginx",
+                "--lazy",
+                "-h", "150", "-w", "700",
+                "-l 0",
+                "-a", "PNG",
+                "-v requests/sec",
+                "DEF:requests=%s:requests:AVERAGE" % NginxStat.FILE_NAME,
+                "AREA:requests#336600:Requests",
+                "GPRINT:requests:MAX:Max\\: %5.1lf %S",
+                "GPRINT:requests:AVERAGE:\\tAvg\\: %5.1lf %S",
+                "GPRINT:requests:LAST:\\tCurrent\\: %5.1lf %S",
+                "HRULE:0#000000"
+            )
+        elif prefix == 'nginx_connections':
+            rrdtool.graph(
+                "nginx_connections_%s.png" % period,
+                "-s -1%s" % period,
+                "-t Requests on nginx",
+                "--lazy",
+                "-h", "150", "-w", "700",
+                "-l 0",
+                "-a", "PNG",
+                "-v requests",
+                "DEF:total=%s:total:AVERAGE" % NginxStat.FILE_NAME,
+                "DEF:reading=%s:reading:AVERAGE" % NginxStat.FILE_NAME,
+                "DEF:writing=%s:writing:AVERAGE" % NginxStat.FILE_NAME,
+                "DEF:waiting=%s:waiting:AVERAGE" % NginxStat.FILE_NAME,
+
+                "LINE2:total#22FF22:Total",
+                "GPRINT:total:LAST:   Current\\: %5.1lf %S",
+                "GPRINT:total:MIN:  Min\\: %5.1lf %S",
+                "GPRINT:total:AVERAGE: Avg\\: %5.1lf %S",
+                "GPRINT:total:MAX:  Max\\: %5.1lf %S\\n",
+
+                "AREA:reading#0022FF:Reading",
+                "GPRINT:reading:LAST: Current\\: %5.1lf %S",
+                "GPRINT:reading:MIN:  Min\\: %5.1lf %S",
+                "GPRINT:reading:AVERAGE: Avg\\: %5.1lf %S",
+                "GPRINT:reading:MAX:  Max\\: %5.1lf %S\\n",
+
+                "STACK:writing#FF0000:Writing",
+                "GPRINT:writing:LAST: Current\\: %5.1lf %S",
+                "GPRINT:writing:MIN:  Min\\: %5.1lf %S",
+                "GPRINT:writing:AVERAGE: Avg\\: %5.1lf %S",
+                "GPRINT:writing:MAX:  Max\\: %5.1lf %S\\n",
+
+                "STACK:waiting#00AAAA:Waiting",
+                "GPRINT:waiting:LAST: Current\\: %5.1lf %S",
+                "GPRINT:waiting:MIN:  Min\\: %5.1lf %S",
+                "GPRINT:waiting:AVERAGE: Avg\\: %5.1lf %S",
+                "GPRINT:waiting:MAX:  Max\\: %5.1lf %S\\n",
+                "HRULE:0#000000"
+            )
+
+
+class RedisStat(Stat):
+    """Collect Redis usage information
+    """
+    FILE_NAME = 'redis.rrd'
+    RRD_DATA_SOURCES = DS.ds(["total_commands_processed"], DS.DERIVE) + \
+        DS.ds(["used_memory", "rdb_changes_since_last_save", "keys"], DS.GAUGE)
+
+    def __init__(self):
+        super(RedisStat, self).__init__(RedisStat.FILE_NAME, RedisStat.DATA_SOURCES)
+        self.stats['used_memory'] = 0
+        self.stats['rdb_changes_since_last_save'] = 0
+        self.stats['total_commands_processed'] = 0
+        # sum(db1, db2)....
+        self.stats['keys'] = 0
+        self.redis = redis.StrictRedis()
+
+    def read_stat(self):
+        rs = self.redis.info()
+        for x in ['connected_clients', 'used_memory', 'used_memory_lua',
+                  'rdb_changes_since_last_save', 'total_commands_processed',
+                  'keyspace_hits', 'keyspace_misses']:
+            redis.stats[x] = rs[x]
+        self.stats['keys'] = sum([rs[db]['keys'] for db in
+                                  filter(lambda x: x.startswith('db'),
+                                         rs.keys())])
+
     def make_image(self, period):
-        rrdtool.graph(
-            "nginx_requests_%s.png" % period,
-            "-s -1%s" % period,
-            "-t Requests on nginx",
-            "--lazy",
-            "-h", "150", "-w", "700",
-            "-l 0",
-            "-a", "PNG",
-            "-v requests/sec",
-            "DEF:requests=%s:requests:AVERAGE" % NginxStat.FILE_NAME,
-            "AREA:requests#336600:Requests",
-            "GPRINT:requests:MAX:Max\\: %5.1lf %S",
-            "GPRINT:requests:AVERAGE:\\tAvg\\: %5.1lf %S",
-            "GPRINT:requests:LAST:\\tCurrent\\: %5.1lf %S",
-            "HRULE:0#000000"
-        )
-        rrdtool.graph(
-            "nginx_connections_%s.png" % period,
-            "-s -1%s" % period,
-            "-t Requests on nginx",
-            "--lazy",
-            "-h", "150", "-w", "700",
-            "-l 0",
-            "-a", "PNG",
-            "-v requests",
-            "DEF:total=%s:total:AVERAGE" % NginxStat.FILE_NAME,
-            "DEF:reading=%s:reading:AVERAGE" % NginxStat.FILE_NAME,
-            "DEF:writing=%s:writing:AVERAGE" % NginxStat.FILE_NAME,
-            "DEF:waiting=%s:waiting:AVERAGE" % NginxStat.FILE_NAME,
-
-            "LINE2:total#22FF22:Total",
-            "GPRINT:total:LAST:   Current\\: %5.1lf %S",
-            "GPRINT:total:MIN:  Min\\: %5.1lf %S",
-            "GPRINT:total:AVERAGE: Avg\\: %5.1lf %S",
-            "GPRINT:total:MAX:  Max\\: %5.1lf %S\\n",
-
-            "AREA:reading#0022FF:Reading",
-            "GPRINT:reading:LAST: Current\\: %5.1lf %S",
-            "GPRINT:reading:MIN:  Min\\: %5.1lf %S",
-            "GPRINT:reading:AVERAGE: Avg\\: %5.1lf %S",
-            "GPRINT:reading:MAX:  Max\\: %5.1lf %S\\n",
-
-            "STACK:writing#FF0000:Writing",
-            "GPRINT:writing:LAST: Current\\: %5.1lf %S",
-            "GPRINT:writing:MIN:  Min\\: %5.1lf %S",
-            "GPRINT:writing:AVERAGE: Avg\\: %5.1lf %S",
-            "GPRINT:writing:MAX:  Max\\: %5.1lf %S\\n",
-
-            "STACK:waiting#00AAAA:Waiting",
-            "GPRINT:waiting:LAST: Current\\: %5.1lf %S",
-            "GPRINT:waiting:MIN:  Min\\: %5.1lf %S",
-            "GPRINT:waiting:AVERAGE: Avg\\: %5.1lf %S",
-            "GPRINT:waiting:MAX:  Max\\: %5.1lf %S\\n",
-            "HRULE:0#000000"
-        )
-
-
-if __name__ == '__main__':
-    # Read config.json
-    config = get_config()
-    if config is None:
-        sys.exit(1)
-    # Defaults
-    stats = [CPUStat(config['cpu']['physical']), RAMStat()]
-    # Swap
-    if config['swap']:
-        stats.append(SwapStat())
-    # Nginx
-    if config['nginx'] != '':
-        stats.append(NginxStat(config['nginx']))
-    # Network
-    for dev, name in config['network_devices'].iteritems():
-        stats.append(NetworkStat(dev, name))
-    # Hdd
-    for dev, name in config['hdd'].iteritems():
-        stats.append(HDDStat(dev, name))
-    # Run all
-    for s in stats:
-        s.create_rrd()
-        s.read_stat()
-        s.update_stat()
-    for s in stats:
-        for p in ['hour', 'day', 'week', 'month', 'year']:
-            s.make_image(p)
+        pass

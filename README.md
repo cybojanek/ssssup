@@ -3,7 +3,7 @@
 Collection of simple monitoring sccripts in Python. Why Python? Because.
 
 ## Requirements
-1. _simplejson_ and _rrdtool_ Python packages
+1. *simplejson*, *rrdtool*, *twisted*, *crontab* Python packages
 2. web server
 
 ## Installation
@@ -38,4 +38,3 @@ location /nginx_status {
     access_log   off;
 }
 ```
-
