@@ -7,7 +7,7 @@ from twisted.web import static, server
 from twisted.application import service, internet
 
 from stats import get_config
-from stats import Stat, CPUStat, HDDStat, RAMStat, SwapStat, NetworkStat, NginxStat
+from stats import Stat, CPUStat, HDDIO, HDDUsage, RAMStat, SwapStat, NetworkStat, NginxStat
 
 # List of stats to monitor
 stats = []
@@ -74,9 +74,12 @@ def load_stats():
     # Network
     for dev, name in config['network_devices'].iteritems():
         stats.append(NetworkStat(dev, name))
-    # Hdd
-    for dev, name in config['hdd'].iteritems():
-        stats.append(HDDStat(dev, name))
+    # Hdd io
+    for dev, name in config['hdd_io'].iteritems():
+        stats.append(HDDIO(dev, name))
+    # Hdd usage
+    for dev, name in config['hdd_usage'].iteritems():
+        stats.append(HDDUsage(dev, name))
     # Run all
     for s in stats:
         # Create rrds

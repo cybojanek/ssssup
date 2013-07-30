@@ -1,6 +1,7 @@
 import os
 import rrdtool
 import simplejson
+import subprocess
 import urllib2
 
 
@@ -212,8 +213,8 @@ class CPUStat(Stat):
         )
 
 
-class HDDStat(Stat):
-    """Collect RAM usage information
+class HDDIO(Stat):
+    """Collect HDD IO usage information
     """
     FILE_NAME = 'hdd_io_%s.rrd'
     RRD_DATA_SOURCES = DS.ds(["read", "write", "rwait", "wwait"], DS.DERIVE)
@@ -225,8 +226,8 @@ class HDDStat(Stat):
         name - human name of device
 
         """
-        super(HDDStat, self).__init__(HDDStat.FILE_NAME % device,
-                                      HDDStat.RRD_DATA_SOURCES)
+        super(HDDIO, self).__init__(HDDIO.FILE_NAME % device,
+                                      HDDIO.RRD_DATA_SOURCES)
         self.device = device
         self.name = name
         self.stats['read'] = 0
@@ -253,7 +254,7 @@ class HDDStat(Stat):
             pass
 
     def make_image(self, prefix, period):
-        super(HDDStat, self).make_image(prefix, period)
+        super(HDDIO, self).make_image(prefix, period)
         if prefix == 'hdd_io_%s' % self.device:
             rrdtool.graph(
                 "hdd_io_%s_%s.png" % (self.device, period),
@@ -264,8 +265,8 @@ class HDDStat(Stat):
                 "-l 0", "-b", "1000",
                 "-a", "PNG",
                 "-v iops/sec",
-                "DEF:read=%s:read:AVERAGE" % HDDStat.FILE_NAME % self.device,
-                "DEF:write=%s:write:AVERAGE" % HDDStat.FILE_NAME % self.device,
+                "DEF:read=%s:read:AVERAGE" % HDDIO.FILE_NAME % self.device,
+                "DEF:write=%s:write:AVERAGE" % HDDIO.FILE_NAME % self.device,
                 "CDEF:write_neg=write,-1,*",
                 "TEXTALIGN:left",
                 "AREA:read#000099:Read ops ",
@@ -288,8 +289,8 @@ class HDDStat(Stat):
                 "-l 0", "-b", "1000",
                 "-a", "PNG",
                 "-v seconds",
-                "DEF:rwait=%s:rwait:AVERAGE" % HDDStat.FILE_NAME % self.device,
-                "DEF:wwait=%s:wwait:AVERAGE" % HDDStat.FILE_NAME % self.device,
+                "DEF:rwait=%s:rwait:AVERAGE" % HDDIO.FILE_NAME % self.device,
+                "DEF:wwait=%s:wwait:AVERAGE" % HDDIO.FILE_NAME % self.device,
                 "CDEF:wwait_neg=wwait,-1,*",
                 "TEXTALIGN:left",
                 "AREA:rwait#000099:Read wait ",
@@ -302,6 +303,76 @@ class HDDStat(Stat):
                 "GPRINT:wwait:LAST: Current\\: %5.1lf %S seconds",
                 "HRULE:0#000000"
             )
+
+
+class HDDUsage(Stat):
+    """Collect HDD disk usage information
+    """
+    FILE_NAME = 'hdd_usage_%s.rrd'
+    RRD_DATA_SOURCES = DS.ds(["used", "free"], DS.GAUGE)
+
+    def __init__(self, device, name):
+        """
+        Arguments:
+        device - device name
+        name - human name of device
+
+        """
+        self.device = device
+        self.name = name
+        self.clean_device = self.device.replace('/', '_')
+        super(HDDUsage, self).__init__(HDDUsage.FILE_NAME % self.clean_device,
+                                       HDDUsage.RRD_DATA_SOURCES)
+        self.stats['used'] = 0
+        self.stats['free'] = 0
+        self.IMAGE_PREFIXES = ['hdd_usage_%s' % self.clean_device]
+
+    def read_stat(self):
+        try:
+            lines = subprocess.check_output(['df', self.device]).split('\n')
+            if len(lines) < 2:
+                return
+            # Do this instead of assinging to vars, in case the last one
+            # has spaces...hopefully the device doesnt...
+            info = lines[1].split()
+            if info[0] != self.device:
+                return
+            self.stats['used'] = int(info[2]) * 1024
+            self.stats['free'] = int(info[3]) * 1024
+        except:
+            pass
+
+    def make_image(self, prefix, period):
+        super(HDDUsage, self).make_image(prefix, period)
+        rrdtool.graph(
+            "%s_%s.png" % (prefix, period),
+            "-s -1%s" % period,
+            "-t usage on %s :: %s" % (self.device, self.name),
+            "--lazy",
+            "-h", "300", "-w", "700", "--full-size-mode",
+            "-l 0",
+            "-b", "1024",
+            "-a", "PNG",
+            "-v hdd usage",
+            "DEF:used=%s:used:AVERAGE" % HDDUsage.FILE_NAME % self.clean_device,
+            "DEF:free=%s:free:AVERAGE" % HDDUsage.FILE_NAME % self.clean_device,
+            "CDEF:total=used,free,+",
+
+            "AREA:free#000099:Free",
+            "GPRINT:free:MIN:     Min\\: %8.2lf %S",
+            "GPRINT:free:AVERAGE:\\tAvg\\: %8.2lf %S",
+            "GPRINT:free:MAX:\\tMax\\: %8.2lf %S \\n",
+
+            "STACK:used#FF9C0F:Used",
+            "GPRINT:used:MIN:     Min\\: %8.2lf %S",
+            "GPRINT:used:AVERAGE:\\tAvg\\: %8.2lf %S",
+            "GPRINT:used:MAX:\\tMax\\: %8.2lf %S \\n",
+
+            "LINE2:total#FF0000:Total",
+            "GPRINT:total:MIN:    Min\\: %8.2lf %S",
+            "GPRINT:total:AVERAGE:\\tAvg\\: %8.2lf %S",
+            "GPRINT:total:MAX:\\tMax\\: %8.2lf %S \\n",
+        )
 
 
 class RAMStat(Stat):
@@ -355,11 +426,6 @@ class RAMStat(Stat):
             "DEF:cached=%s:cached:AVERAGE" % RAMStat.FILE_NAME,
             "CDEF:used=total,free,-,buffers,-,cached,-",
 
-            "LINE2:total#FF0000:Total",
-            "GPRINT:total:MIN:    Min\\: %8.2lf %S",
-            "GPRINT:total:AVERAGE:\\tAvg\\: %8.2lf %S",
-            "GPRINT:total:MAX:\\tMax\\: %8.2lf %S \\n",
-
             "AREA:free#000099:Free",
             "GPRINT:free:MIN:     Min\\: %8.2lf %S",
             "GPRINT:free:AVERAGE:\\tAvg\\: %8.2lf %S",
@@ -379,6 +445,11 @@ class RAMStat(Stat):
             "GPRINT:used:MIN:     Min\\: %8.2lf %S",
             "GPRINT:used:AVERAGE:\\tAvg\\: %8.2lf %S",
             "GPRINT:used:MAX:\\tMax\\: %8.2lf %S \\n",
+
+            "LINE2:total#FF0000:Total",
+            "GPRINT:total:MIN:    Min\\: %8.2lf %S",
+            "GPRINT:total:AVERAGE:\\tAvg\\: %8.2lf %S",
+            "GPRINT:total:MAX:\\tMax\\: %8.2lf %S \\n",
         )
 
 
@@ -429,11 +500,6 @@ class SwapStat(Stat):
             "DEF:cached=%s:cached:AVERAGE" % SwapStat.FILE_NAME,
             "CDEF:used=total,free,-,cached,-",
 
-            "LINE2:total#FF0000:Total",
-            "GPRINT:total:MIN:    Min\\: %8.2lf %S",
-            "GPRINT:total:AVERAGE:\\tAvg\\: %8.2lf %S",
-            "GPRINT:total:MAX:\\tMax\\: %8.2lf %S \\n",
-
             "AREA:free#000099:Free",
             "GPRINT:free:MIN:     Min\\: %8.2lf %S",
             "GPRINT:free:AVERAGE:\\tAvg\\: %8.2lf %S",
@@ -447,7 +513,12 @@ class SwapStat(Stat):
             "STACK:used#FF9C0F:Used",
             "GPRINT:used:MIN:     Min\\: %8.2lf %S",
             "GPRINT:used:AVERAGE:\\tAvg\\: %8.2lf %S",
-            "GPRINT:used:MAX:\\tMax\\: %8.2lf %S \\n"
+            "GPRINT:used:MAX:\\tMax\\: %8.2lf %S \\n",
+
+            "LINE2:total#FF0000:Total",
+            "GPRINT:total:MIN:    Min\\: %8.2lf %S",
+            "GPRINT:total:AVERAGE:\\tAvg\\: %8.2lf %S",
+            "GPRINT:total:MAX:\\tMax\\: %8.2lf %S \\n"
         )
 
 
@@ -573,12 +644,6 @@ class NginxStat(Stat):
                 "DEF:writing=%s:writing:AVERAGE" % NginxStat.FILE_NAME,
                 "DEF:waiting=%s:waiting:AVERAGE" % NginxStat.FILE_NAME,
 
-                "LINE2:total#22FF22:Total",
-                "GPRINT:total:LAST:   Current\\: %5.1lf %S",
-                "GPRINT:total:MIN:  Min\\: %5.1lf %S",
-                "GPRINT:total:AVERAGE: Avg\\: %5.1lf %S",
-                "GPRINT:total:MAX:  Max\\: %5.1lf %S\\n",
-
                 "AREA:reading#0022FF:Reading",
                 "GPRINT:reading:LAST: Current\\: %5.1lf %S",
                 "GPRINT:reading:MIN:  Min\\: %5.1lf %S",
@@ -596,7 +661,13 @@ class NginxStat(Stat):
                 "GPRINT:waiting:MIN:  Min\\: %5.1lf %S",
                 "GPRINT:waiting:AVERAGE: Avg\\: %5.1lf %S",
                 "GPRINT:waiting:MAX:  Max\\: %5.1lf %S\\n",
-                "HRULE:0#000000"
+                "HRULE:0#000000",
+
+                "LINE2:total#22FF22:Total",
+                "GPRINT:total:LAST:   Current\\: %5.1lf %S",
+                "GPRINT:total:MIN:  Min\\: %5.1lf %S",
+                "GPRINT:total:AVERAGE: Avg\\: %5.1lf %S",
+                "GPRINT:total:MAX:  Max\\: %5.1lf %S\\n"
             )
 
 

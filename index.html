@@ -44,10 +44,14 @@
                 appendImage('nginx_requests_' + time + '.png')
                 appendImage('nginx_connections_' + time + '.png')
             }
-            // HDD
-            for(dev in config['hdd']) {
+            // HDD IO
+            for(dev in config['hdd_io']) {
                 appendImage('hdd_io_' + dev + '_' + time + '.png');
                 appendImage('hdd_io_wait_' + dev + '_' + time + '.png');
+            }
+            // HDD Usage
+            for(dev in config['hdd_usage']) {
+                appendImage('hdd_usage_' + dev.replace(new RegExp('/', 'g'), '_') + '_' + time + '.png');
             }
         }
 

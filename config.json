@@ -5,8 +5,11 @@
     "cpu": {
         "physical": 1
     },
-    "hdd": {
+    "hdd_io": {
         "sda": "root"
+    },
+    "hdd_usage": {
+        "/dev/sda": "root"
     },
     "swap": true,
     "nginx": "http://localhost/nginx_status/"
