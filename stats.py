@@ -136,7 +136,7 @@ class CPUStat(Stat):
     """Collect CPU usage information
     """
     FILE_NAME = 'cpu.rrd'
-    RRD_DATA_SOURCES = DS.ds(["user", "nice", "system", "idle", "wait"],
+    RRD_DATA_SOURCES = DS.ds(["user", "nice", "system", "idle", "wait", 'irq', 'softirq'],
                              DS.DERIVE)
     IMAGE_PREFIXES = ['cpu']
 
@@ -146,22 +146,25 @@ class CPUStat(Stat):
         pcpu - number of physical cpus
 
         """
-        super(CPUStat, self).__init__(CPUStat.FILE_NAME,
-                                      CPUStat.RRD_DATA_SOURCES)
+        super(CPUStat, self).__init__(self.FILE_NAME, self.RRD_DATA_SOURCES)
         self.pcpu = pcpu
         self.stats['user'] = 0
         self.stats['nice'] = 0
         self.stats['system'] = 0
         self.stats['idle'] = 0
         self.stats['wait'] = 0
+        self.stats['irq'] = 0
+        self.stats['softirq'] = 0
 
     def read_stat(self):
-        stats = [int(x) for x in open("/proc/stat", 'r').readline().split()[1:6]]
+        stats = [int(x) for x in open("/proc/stat", 'r').readline().split()[1:8]]
         self.stats['user'] = stats[0]
         self.stats['nice'] = stats[1]
         self.stats['system'] = stats[2]
         self.stats['idle'] = stats[3]
         self.stats['wait'] = stats[4]
+        self.stats['irq'] = stats[5]
+        self.stats['softirq'] = stats[6]
 
     def make_image(self, prefix, period):
         super(CPUStat, self).make_image(prefix, period)
@@ -175,11 +178,14 @@ class CPUStat(Stat):
             "-l 0",
             "-a", "PNG",
             "-v cpu usage",
-            "DEF:user=%s:user:AVERAGE" % CPUStat.FILE_NAME,
-            "DEF:nice=%s:nice:AVERAGE" % CPUStat.FILE_NAME,
-            "DEF:system=%s:system:AVERAGE" % CPUStat.FILE_NAME,
-            "DEF:idle=%s:idle:AVERAGE" % CPUStat.FILE_NAME,
-            "DEF:wait=%s:wait:AVERAGE" % CPUStat.FILE_NAME,
+            "DEF:user=%s:user:AVERAGE" % self.FILE_NAME,
+            "DEF:nice=%s:nice:AVERAGE" % self.FILE_NAME,
+            "DEF:system=%s:system:AVERAGE" % self.FILE_NAME,
+            "DEF:idle=%s:idle:AVERAGE" % self.FILE_NAME,
+            "DEF:wait=%s:wait:AVERAGE" % self.FILE_NAME,
+            "DEF:irq=%s:irq:AVERAGE" % self.FILE_NAME,
+            "DEF:softirq=%s:softirq:AVERAGE" % self.FILE_NAME,
+
 
             "AREA:user#FF0000:User",
             "GPRINT:user:MIN:    Min\\: %10.0lf ",
@@ -205,6 +211,17 @@ class CPUStat(Stat):
             "GPRINT:wait:MIN:    Min\\: %10.0lf ",
             "GPRINT:wait:AVERAGE:\\tAvg\\: %10.0lf ",
             "GPRINT:wait:MAX:\\tMax\\: %10.0lf \\n",
+
+            "STACK:irq#00e4ff:irq",
+            "GPRINT:irq:MIN:    Min\\: %10.0lf ",
+            "GPRINT:irq:AVERAGE:\\tAvg\\: %10.0lf ",
+            "GPRINT:irq:MAX:\\tMax\\: %10.0lf \\n",
+
+            "STACK:softirq#FF00D0:softirq",
+            "GPRINT:softirq:MIN:    Min\\: %10.0lf ",
+            "GPRINT:softirq:AVERAGE:\\tAvg\\: %10.0lf ",
+            "GPRINT:softirq:MAX:\\tMax\\: %10.0lf \\n",
+
             "HRULE:0#000000",
             # Draw a line across the max for what max usage should be
             # this is particularly usefull if you have hyperthreading
@@ -226,8 +243,7 @@ class HDDIO(Stat):
         name - human name of device
 
         """
-        super(HDDIO, self).__init__(HDDIO.FILE_NAME % device,
-                                      HDDIO.RRD_DATA_SOURCES)
+        super(HDDIO, self).__init__(self.FILE_NAME % device, self.RRD_DATA_SOURCES)
         self.device = device
         self.name = name
         self.stats['read'] = 0
@@ -265,8 +281,8 @@ class HDDIO(Stat):
                 "-l 0", "-b", "1000",
                 "-a", "PNG",
                 "-v iops/sec",
-                "DEF:read=%s:read:AVERAGE" % HDDIO.FILE_NAME % self.device,
-                "DEF:write=%s:write:AVERAGE" % HDDIO.FILE_NAME % self.device,
+                "DEF:read=%s:read:AVERAGE" % self.FILE_NAME % self.device,
+                "DEF:write=%s:write:AVERAGE" % self.FILE_NAME % self.device,
                 "CDEF:write_neg=write,-1,*",
                 "TEXTALIGN:left",
                 "AREA:read#000099:Read ops ",
@@ -289,8 +305,8 @@ class HDDIO(Stat):
                 "-l 0", "-b", "1000",
                 "-a", "PNG",
                 "-v seconds",
-                "DEF:rwait=%s:rwait:AVERAGE" % HDDIO.FILE_NAME % self.device,
-                "DEF:wwait=%s:wwait:AVERAGE" % HDDIO.FILE_NAME % self.device,
+                "DEF:rwait=%s:rwait:AVERAGE" % self.FILE_NAME % self.device,
+                "DEF:wwait=%s:wwait:AVERAGE" % self.FILE_NAME % self.device,
                 "CDEF:wwait_neg=wwait,-1,*",
                 "TEXTALIGN:left",
                 "AREA:rwait#000099:Read wait ",
@@ -321,8 +337,8 @@ class HDDUsage(Stat):
         self.device = device
         self.name = name
         self.clean_device = self.device.replace('/', '_')
-        super(HDDUsage, self).__init__(HDDUsage.FILE_NAME % self.clean_device,
-                                       HDDUsage.RRD_DATA_SOURCES)
+        super(HDDUsage, self).__init__(self.FILE_NAME % self.clean_device,
+                                       self.RRD_DATA_SOURCES)
         self.stats['used'] = 0
         self.stats['free'] = 0
         self.IMAGE_PREFIXES = ['hdd_usage_%s' % self.clean_device]
@@ -354,8 +370,8 @@ class HDDUsage(Stat):
             "-b", "1024",
             "-a", "PNG",
             "-v hdd usage",
-            "DEF:used=%s:used:AVERAGE" % HDDUsage.FILE_NAME % self.clean_device,
-            "DEF:free=%s:free:AVERAGE" % HDDUsage.FILE_NAME % self.clean_device,
+            "DEF:used=%s:used:AVERAGE" % self.FILE_NAME % self.clean_device,
+            "DEF:free=%s:free:AVERAGE" % self.FILE_NAME % self.clean_device,
             "CDEF:total=used,free,+",
 
             "AREA:free#000099:Free",
@@ -384,8 +400,7 @@ class RAMStat(Stat):
     IMAGE_PREFIXES = ['ram']
 
     def __init__(self):
-        super(RAMStat, self).__init__(RAMStat.FILE_NAME,
-                                      RAMStat.RRD_DATA_SOURCES)
+        super(RAMStat, self).__init__(self.FILE_NAME, self.RRD_DATA_SOURCES)
         self.stats['total'] = 0
         self.stats['free'] = 0
         self.stats['buffers'] = 0
@@ -420,10 +435,10 @@ class RAMStat(Stat):
             "-b", "1024",
             "-a", "PNG",
             "-v mem usage",
-            "DEF:total=%s:total:AVERAGE" % RAMStat.FILE_NAME,
-            "DEF:free=%s:free:AVERAGE" % RAMStat.FILE_NAME,
-            "DEF:buffers=%s:buffers:AVERAGE" % RAMStat.FILE_NAME,
-            "DEF:cached=%s:cached:AVERAGE" % RAMStat.FILE_NAME,
+            "DEF:total=%s:total:AVERAGE" % self.FILE_NAME,
+            "DEF:free=%s:free:AVERAGE" % self.FILE_NAME,
+            "DEF:buffers=%s:buffers:AVERAGE" % self.FILE_NAME,
+            "DEF:cached=%s:cached:AVERAGE" % self.FILE_NAME,
             "CDEF:used=total,free,-,buffers,-,cached,-",
 
             "AREA:free#000099:Free",
@@ -462,8 +477,7 @@ class SwapStat(Stat):
     IMAGE_PREFIXES = ['swap']
 
     def __init__(self):
-        super(SwapStat, self).__init__(SwapStat.FILE_NAME,
-                                       SwapStat.RRD_DATA_SOURCES)
+        super(SwapStat, self).__init__(self.FILE_NAME, self.RRD_DATA_SOURCES)
         self.stats['total'] = 0
         self.stats['free'] = 0
         self.stats['cached'] = 0
@@ -495,9 +509,9 @@ class SwapStat(Stat):
             "-b", "1024",
             "-a", "PNG",
             "-v swap usage",
-            "DEF:total=%s:total:AVERAGE" % SwapStat.FILE_NAME,
-            "DEF:free=%s:free:AVERAGE" % SwapStat.FILE_NAME,
-            "DEF:cached=%s:cached:AVERAGE" % SwapStat.FILE_NAME,
+            "DEF:total=%s:total:AVERAGE" % self.FILE_NAME,
+            "DEF:free=%s:free:AVERAGE" % self.FILE_NAME,
+            "DEF:cached=%s:cached:AVERAGE" % self.FILE_NAME,
             "CDEF:used=total,free,-,cached,-",
 
             "AREA:free#000099:Free",
@@ -535,8 +549,7 @@ class NetworkStat(Stat):
         name - human name of device
 
         """
-        super(NetworkStat, self).__init__(NetworkStat.FILE_NAME % device,
-                                          NetworkStat.RRD_DATA_SOURCES)
+        super(NetworkStat, self).__init__(self.FILE_NAME % device, self.RRD_DATA_SOURCES)
         self.device = device
         self.name = name
         self.stats['in'] = 0
@@ -564,8 +577,8 @@ class NetworkStat(Stat):
             "-l 0", "-b", "1024",
             "-a", "PNG",
             "-v bytes/sec",
-            "DEF:in=%s:in:AVERAGE" % NetworkStat.FILE_NAME % self.device,
-            "DEF:out=%s:out:AVERAGE" % NetworkStat.FILE_NAME % self.device,
+            "DEF:in=%s:in:AVERAGE" % self.FILE_NAME % self.device,
+            "DEF:out=%s:out:AVERAGE" % self.FILE_NAME % self.device,
             "CDEF:out_neg=out,-1,*",
             "TEXTALIGN:left",
             "AREA:in#32CD32:Incoming",
@@ -591,8 +604,7 @@ class NginxStat(Stat):
     IMAGE_PREFIXES = ['nginx_requests', 'nginx_connections']
 
     def __init__(self, url):
-        super(NginxStat, self).__init__(NginxStat.FILE_NAME,
-                                        NginxStat.RRD_DATA_SOURCES)
+        super(NginxStat, self).__init__(self.FILE_NAME, self.RRD_DATA_SOURCES)
         self.url = url
         self.stats['requests'] = 0
         self.stats['total'] = 0
@@ -622,7 +634,7 @@ class NginxStat(Stat):
                 "-l 0",
                 "-a", "PNG",
                 "-v requests/sec",
-                "DEF:requests=%s:requests:AVERAGE" % NginxStat.FILE_NAME,
+                "DEF:requests=%s:requests:AVERAGE" % self.FILE_NAME,
                 "AREA:requests#336600:Requests",
                 "GPRINT:requests:MAX:Max\\: %5.1lf %S",
                 "GPRINT:requests:AVERAGE:\\tAvg\\: %5.1lf %S",
@@ -639,10 +651,10 @@ class NginxStat(Stat):
                 "-l 0",
                 "-a", "PNG",
                 "-v requests",
-                "DEF:total=%s:total:AVERAGE" % NginxStat.FILE_NAME,
-                "DEF:reading=%s:reading:AVERAGE" % NginxStat.FILE_NAME,
-                "DEF:writing=%s:writing:AVERAGE" % NginxStat.FILE_NAME,
-                "DEF:waiting=%s:waiting:AVERAGE" % NginxStat.FILE_NAME,
+                "DEF:total=%s:total:AVERAGE" % self.FILE_NAME,
+                "DEF:reading=%s:reading:AVERAGE" % self.FILE_NAME,
+                "DEF:writing=%s:writing:AVERAGE" % self.FILE_NAME,
+                "DEF:waiting=%s:waiting:AVERAGE" % self.FILE_NAME,
 
                 "AREA:reading#0022FF:Reading",
                 "GPRINT:reading:LAST: Current\\: %5.1lf %S",
@@ -679,7 +691,7 @@ class RedisStat(Stat):
         DS.ds(["used_memory", "rdb_changes_since_last_save", "keys"], DS.GAUGE)
 
     def __init__(self):
-        super(RedisStat, self).__init__(RedisStat.FILE_NAME, RedisStat.DATA_SOURCES)
+        super(RedisStat, self).__init__(self.FILE_NAME, self.DATA_SOURCES)
         self.stats['used_memory'] = 0
         self.stats['rdb_changes_since_last_save'] = 0
         self.stats['total_commands_processed'] = 0
