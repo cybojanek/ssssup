@@ -1,4 +1,3 @@
-from crontab import CronTab
 import time
 from sys import exit
 import re
@@ -14,21 +13,18 @@ stats = []
 image_map = {}
 image_gen_times = {}
 
-# On .next() returns seconds until next minute
-# Can be used many times (stateless)
-EVERY_MINUTE = CronTab("* * * * *")
 PNG_MATCHER = re.compile('(\w*)_(%s)\.png' % ('|'.join(Stat.IMAGE_PERIODS)))
 
 
 def update_stats(*args, **kwargs):
     """Calls itself every minute to update rrdtool stats
     """
+    reactor.callLater(60.0, update_stats)
     for s in stats:
         # TODO: make this async
         s.read_stat()
         # TODO: make this async
         s.update_stat()
-    reactor.callLater(EVERY_MINUTE.next(), update_stats)
 
 
 class DynamicStatFiles(static.File):

@@ -3,7 +3,7 @@
 Collection of simple monitoring sccripts in Python. Why Python? Because. Demo at http://cybojanek.net:8080
 
 ## Requirements
-1. *simplejson*, *rrdtool*, *twisted*, *crontab* Python packages
+1. *simplejson*, *rrdtool*, *twisted* Python packages
 2. web server
 
 ## Installation
