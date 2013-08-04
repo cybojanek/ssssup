@@ -45,7 +45,7 @@ class DS(object):
         for name in names:
             if dstype not in [DS.GAUGE, DS.DERIVE]:
                 raise ValueError("Need a data string dstype")
-            if not isinstance(ulimit, int) and not ulimit == "U":
+            if not isinstance(ulimit, int) and not isinstance(ulimit, long) and not ulimit == "U":
                 raise ValueError("Need a valid data string ulimit")
             ret.append("DS:%s:%s:%s:%s:%s" % (name, dstype, interval, llimit,
                                               ulimit))
@@ -395,8 +395,7 @@ class RAMStat(Stat):
     """Collect RAM usage information
     """
     FILE_NAME = 'ram.rrd'
-    RRD_DATA_SOURCES = DS.ds(["total", "free", "buffers", "cached"], DS.GAUGE,
-                             ulimit=34359738368)
+    RRD_DATA_SOURCES = DS.ds(["total", "free", "buffers", "cached"], DS.GAUGE)
     IMAGE_PREFIXES = ['ram']
 
     def __init__(self):
@@ -472,8 +471,7 @@ class SwapStat(Stat):
     """Collect swap usage information
     """
     FILE_NAME = 'swap.rrd'
-    RRD_DATA_SOURCES = DS.ds(["total", "free", "cached"], DS.GAUGE,
-                             ulimit=34359738368)
+    RRD_DATA_SOURCES = DS.ds(["total", "free", "cached"], DS.GAUGE)
     IMAGE_PREFIXES = ['swap']
 
     def __init__(self):
