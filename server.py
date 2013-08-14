@@ -88,20 +88,17 @@ def load_stats():
             for period in Stat.IMAGE_PERIODS:
                 image_gen_times[prefix][period] = 0
 
-if __name__ == '__main__':
-    load_stats()
-    # Serve http web directory
-    root = DynamicStatFiles("./")
+# Common code
+load_stats()
+# Serve http web directory
+root = DynamicStatFiles("./")
+# Bootstrap crontab calling
+reactor.callLater(1, update_stats)
+
+if __name__ == '__main__':  # Called directly
     reactor.listenTCP(8080, server.Site(root))
-    # Bootstrap crontab calling
-    reactor.callLater(1, update_stats)
     # Run!
     reactor.run()
-else:
-    load_stats()
-    # Serve http web directory
-    root = DynamicStatFiles("./")
-    # Bootstrap crontab calling
-    reactor.callLater(1, update_stats)
+else:  # Invoked through twistd
     application = service.Application("SSSSUP Server")
     internet.TCPServer(8080, server.Site(root)).setServiceParent(application)
