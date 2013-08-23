@@ -41,3 +41,7 @@ location /nginx_status {
     access_log   off;
 }
 ```
+
+
+[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/cybojanek/ssssuprrd/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
+
