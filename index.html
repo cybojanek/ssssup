@@ -46,8 +46,9 @@
             }
             // HDD IO
             for(dev in config['hdd_io']) {
-                appendImage('hdd_io_' + dev + '_' + time + '.png');
-                appendImage('hdd_io_wait_' + dev + '_' + time + '.png');
+                appendImage('hdd_io_requests_' + dev + '_' + time + '.png');
+                appendImage('hdd_io_sectors_' + dev + '_' + time + '.png');
+                appendImage('hdd_io_ticks_' + dev + '_' + time + '.png');
             }
             // HDD Usage
             for(dev in config['hdd_usage']) {

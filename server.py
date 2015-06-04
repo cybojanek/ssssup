@@ -13,7 +13,7 @@ stats = []
 image_map = {}
 image_gen_times = {}
 
-PNG_MATCHER = re.compile('([\w|\-]*)_(%s)\.png' % ('|'.join(Stat.IMAGE_PERIODS)))
+PNG_MATCHER = re.compile('([\w|\-|_]*)_(%s)\.png' % ('|'.join(Stat.IMAGE_PERIODS)))
 
 
 def update_stats(*args, **kwargs):

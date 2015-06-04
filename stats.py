@@ -241,7 +241,8 @@ class HDDIO(Stat):
     """Collect HDD IO usage information
     """
     FILE_NAME = 'hdd_io_%s.rrd'
-    RRD_DATA_SOURCES = DS.ds(["read", "write", "rwait", "wwait"], DS.DERIVE)
+    RRD_DATA_SOURCES = DS.ds(["rrequests", "wrequests", "rsectors", "wsectors",
+                              "rticks", "wticks"], DS.DERIVE)
 
     def __init__(self, device, name):
         """
@@ -253,58 +254,90 @@ class HDDIO(Stat):
         super(HDDIO, self).__init__(self.FILE_NAME % device, self.RRD_DATA_SOURCES)
         self.device = device
         self.name = name
-        self.stats['read'] = 0
-        self.stats['write'] = 0
-        self.stats['rwait'] = 0
-        self.stats['wwait'] = 0
-        self.IMAGE_PREFIXES = ['hdd_io_%s' % self.device, 'hdd_io_wait_%s' % self.device]
+        self.stats['rrequests'] = 0
+        self.stats['wrequests'] = 0
+        self.stats['rsectors'] = 0
+        self.stats['wsectors'] = 0
+        self.stats['rticks'] = 0
+        self.stats['wticks'] = 0
+        self.IMAGE_PREFIXES = ['hdd_io_requests_%s' % self.device,
+                                'hdd_io_sectors_%s' % self.device,
+                                'hdd_io_ticks_%s' % self.device]
 
     def read_stat(self):
-        self.stats['read'] = 0
-        self.stats['write'] = 0
-        self.stats['rwait'] = 0
-        self.stats['wwait'] = 0
+        self.stats['rrequests'] = 0
+        self.stats['wrequests'] = 0
+        self.stats['rsectors'] = 0
+        self.stats['wsectors'] = 0
+        self.stats['rticks'] = 0
+        self.stats['wticks'] = 0
         try:
             values = open('/sys/block/%s/stat' % self.device, 'r').readlines()
             values = values[0].rstrip().split()
-            self.stats['read'] = int(values[0])
-            self.stats['write'] = int(values[4])
-            # Seconds spent waiting for read
-            self.stats['rwait'] = int(values[3]) / 1000
-            # Seconds spent waiting for writes
-            self.stats['wwait'] = int(values[7]) / 1000
+
+            self.stats['rrequests'] = int(values[0])
+            self.stats['rsectors'] = int(values[2])
+            self.stats['rticks'] = int(values[3])
+
+            self.stats['wrequests'] = int(values[4])
+            self.stats['wsectors'] = int(values[6])
+            self.stats['wticks'] = int(values[7])
         except:
             pass
 
     def make_image(self, prefix, period):
         super(HDDIO, self).make_image(prefix, period)
-        if prefix == 'hdd_io_%s' % self.device:
+        if prefix == 'hdd_io_requests_%s' % self.device:
             rrdtool.graph(
-                "hdd_io_%s_%s.png" % (self.device, period),
+                "hdd_io_requests_%s_%s.png" % (self.device, period),
                 "-s -1%s" % period,
-                "-t iops on %s :: %s" % (self.device, self.name),
+                "-t requests on %s :: %s" % (self.device, self.name),
                 "--lazy",
                 "-h", "300", "-w", "700", "--full-size-mode", "-T", "10",
                 "-l 0", "-b", "1000",
                 "-a", "PNG",
-                "-v iops/sec",
-                "DEF:read=%s:read:AVERAGE" % self.FILE_NAME % self.device,
-                "DEF:write=%s:write:AVERAGE" % self.FILE_NAME % self.device,
-                "CDEF:write_neg=write,-1,*",
+                "-v requests/sec",
+                "DEF:rrequests=%s:rrequests:AVERAGE" % self.FILE_NAME % self.device,
+                "DEF:wrequests=%s:wrequests:AVERAGE" % self.FILE_NAME % self.device,
+                "CDEF:wrequests_neg=wrequests,-1,*",
                 "TEXTALIGN:left",
-                "AREA:read#000099:Read ops ",
-                "GPRINT:read:MAX:  Max\\: %5.1lf %s",
-                "GPRINT:read:AVERAGE: Avg\\: %5.1lf %S",
-                "GPRINT:read:LAST: Current\\: %5.1lf %S ops/sec\\n",
-                "AREA:write_neg#FF0000:Write ops",
-                "GPRINT:write:MAX:  Max\\: %5.1lf %S",
-                "GPRINT:write:AVERAGE: Avg\\: %5.1lf %S",
-                "GPRINT:write:LAST: Current\\: %5.1lf %S ops/sec",
+                "AREA:rrequests#000099:Read requests ",
+                "GPRINT:rrequests:MAX:  Max\\: %5.1lf %s",
+                "GPRINT:rrequests:AVERAGE: Avg\\: %5.1lf %S",
+                "GPRINT:rrequests:LAST: Current\\: %5.1lf %S requests/sec\\n",
+                "AREA:wrequests_neg#FF0000:Write requests",
+                "GPRINT:wrequests:MAX:  Max\\: %5.1lf %S",
+                "GPRINT:wrequests:AVERAGE: Avg\\: %5.1lf %S",
+                "GPRINT:wrequests:LAST: Current\\: %5.1lf %S requests/sec",
                 "HRULE:0#000000"
             )
-        elif prefix == 'hdd_io_wait_%s' % self.device:
+        elif prefix == 'hdd_io_sectors_%s' % self.device:
             rrdtool.graph(
-                "hdd_io_wait_%s_%s.png" % (self.device, period),
+                "hdd_io_sectors_%s_%s.png" % (self.device, period),
+                "-s -1%s" % period,
+                "-t sectors on %s :: %s" % (self.device, self.name),
+                "--lazy",
+                "-h", "300", "-w", "700", "--full-size-mode", "-T", "10",
+                "-l 0", "-b", "1000",
+                "-a", "PNG",
+                "-v sectors/sec",
+                "DEF:rsectors=%s:rsectors:AVERAGE" % self.FILE_NAME % self.device,
+                "DEF:wsectors=%s:wsectors:AVERAGE" % self.FILE_NAME % self.device,
+                "CDEF:wsectors_neg=wsectors,-1,*",
+                "TEXTALIGN:left",
+                "AREA:rsectors#000099:Read sectors ",
+                "GPRINT:rsectors:MAX:  Max\\: %5.1lf %s",
+                "GPRINT:rsectors:AVERAGE: Avg\\: %5.1lf %S",
+                "GPRINT:rsectors:LAST: Current\\: %5.1lf %S sectors/sec\\n",
+                "AREA:wsectors_neg#FF0000:Write sectors",
+                "GPRINT:wsectors:MAX:  Max\\: %5.1lf %S",
+                "GPRINT:wsectors:AVERAGE: Avg\\: %5.1lf %S",
+                "GPRINT:wsectors:LAST: Current\\: %5.1lf %S sectors/sec",
+                "HRULE:0#000000"
+            )
+        elif prefix == 'hdd_io_ticks_%s' % self.device:
+            rrdtool.graph(
+                "hdd_io_ticks_%s_%s.png" % (self.device, period),
                 "-s -1%s" % period,
                 "-t wait on %s :: %s" % (self.device, self.name),
                 "--lazy",
@@ -312,18 +345,18 @@ class HDDIO(Stat):
                 "-l 0", "-b", "1000",
                 "-a", "PNG",
                 "-v seconds",
-                "DEF:rwait=%s:rwait:AVERAGE" % self.FILE_NAME % self.device,
-                "DEF:wwait=%s:wwait:AVERAGE" % self.FILE_NAME % self.device,
-                "CDEF:wwait_neg=wwait,-1,*",
+                "DEF:rticks=%s:rticks:AVERAGE" % self.FILE_NAME % self.device,
+                "DEF:wticks=%s:wticks:AVERAGE" % self.FILE_NAME % self.device,
+                "CDEF:wticks_neg=wticks,-1,*",
                 "TEXTALIGN:left",
-                "AREA:rwait#000099:Read wait ",
-                "GPRINT:rwait:MAX:  Max\\: %5.1lf %s",
-                "GPRINT:rwait:AVERAGE: Avg\\: %5.1lf %S",
-                "GPRINT:rwait:LAST: Current\\: %5.1lf %S seconds\\n",
-                "AREA:wwait_neg#FF0000:Write wait",
-                "GPRINT:wwait:MAX:  Max\\: %5.1lf %S",
-                "GPRINT:wwait:AVERAGE: Avg\\: %5.1lf %S",
-                "GPRINT:wwait:LAST: Current\\: %5.1lf %S seconds",
+                "AREA:rticks#000099:Read wait ",
+                "GPRINT:rticks:MAX:  Max\\: %5.1lf %s",
+                "GPRINT:rticks:AVERAGE: Avg\\: %5.1lf %S",
+                "GPRINT:rticks:LAST: Current\\: %5.1lf %S ms\\n",
+                "AREA:wticks_neg#FF0000:Write wait",
+                "GPRINT:wticks:MAX:  Max\\: %5.1lf %S",
+                "GPRINT:wticks:AVERAGE: Avg\\: %5.1lf %S",
+                "GPRINT:wticks:LAST: Current\\: %5.1lf %S ms",
                 "HRULE:0#000000"
             )
 
